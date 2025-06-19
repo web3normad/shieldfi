@@ -1,108 +1,307 @@
-# v4-template
-### **A template for writing Uniswap v4 Hooks 🦄**
+# ShieldFi: MEV-Protected Lending Hook
 
-[`Use this Template`](https://github.com/uniswapfoundation/v4-template/generate)
+ShieldFi is a comprehensive MEV (Maximal Extractable Value) protection system built as a Uniswap v4 hook, providing advanced lending infrastructure with integrated MEV detection and gradual liquidation mechanisms.
 
-1. The example hook [Counter.sol](src/Counter.sol) demonstrates the `beforeSwap()` and `afterSwap()` hooks
-2. The test template [Counter.t.sol](test/Counter.t.sol) preconfigures the v4 pool manager, test tokens, and test liquidity.
+## 🛡️ Overview
 
-<details>
-<summary>Updating to v4-template:latest</summary>
+ShieldFi combines several cutting-edge DeFi technologies to create a robust, MEV-resistant lending platform:
 
-This template is actively maintained -- you can update the v4 dependencies, scripts, and helpers: 
+- **MEV Detection Engine**: Real-time detection of sandwich attacks, front-running, and other MEV extraction attempts
+- **Gradual Liquidation System**: Minimizes MEV extraction during liquidations through time-distributed execution
+- **Circle USDC Integration**: Native USDC lending and borrowing with collateral management
+- **EigenLayer AVS Integration**: Decentralized validation network for enhanced security
+- **Uniswap v4 Hook Architecture**: Seamless integration with the latest AMM technology
+
+## 🏗️ Architecture
+
+### Core Components
+
+1. **ShieldFiHook**: Main hook contract that integrates with Uniswap v4 pools
+2. **MEVDetector**: Advanced MEV detection and risk assessment engine
+3. **CircleUSDCVault**: USDC lending infrastructure with collateral management
+4. **GradualLiquidator**: Time-distributed liquidation system to minimize MEV
+5. **EigenLayerAVS**: Validator network integration for decentralized security
+
+### Key Features
+
+- **Multi-tier Protection**: Standard and Premium protection levels
+- **Real-time MEV Detection**: Sandwich attack, HFT, and timing attack detection
+- **Health Factor Monitoring**: Continuous position health assessment
+- **Emergency Controls**: Pause mechanisms and emergency liquidation
+- **Fee Management**: Flexible fee structure for different protection levels
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- [Foundry](https://getfoundry.sh/) installed
+- Node.js and npm/yarn
+- Git
+
+### Installation
+
 ```bash
-git remote add template https://github.com/uniswapfoundation/v4-template
-git fetch template
-git merge template/main <BRANCH> --allow-unrelated-histories
-```
+# Clone the repository
+git clone https://github.com/your-org/shieldfi-hook.git
+cd shieldfi-hook
 
-</details>
-
----
-
-### Check Forge Installation
-*Ensure that you have correctly installed Foundry (Forge) Stable. You can update Foundry by running:*
-
-```
-foundryup
-```
-
-> *v4-template* appears to be _incompatible_ with Foundry Nightly. See [foundry announcements](https://book.getfoundry.sh/announcements) to revert back to the stable build
-
-
-
-## Set up
-
-*requires [foundry](https://book.getfoundry.sh)*
-
-```
+# Install dependencies
 forge install
-forge test
+
+# Build the project
+forge build
 ```
 
-### Local Development (Anvil)
-
-Other than writing unit tests (recommended!), you can only deploy & test hooks on [anvil](https://book.getfoundry.sh/anvil/)
+### Testing
 
 ```bash
-# start anvil, a local EVM chain
-anvil
+# Run all tests
+forge test
 
-# in a new terminal
-forge script script/Anvil.s.sol \
-    --rpc-url http://localhost:8545 \
-    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-    --broadcast
+# Run tests with verbosity
+forge test -vvv
+
+# Run specific test file
+forge test --match-contract ShieldFiHookTest
+
+# Run with gas reporting
+forge test --gas-report
 ```
 
-See [script/](script/) for hook deployment, pool creation, liquidity provision, and swapping.
+### Deployment
+
+1. **Configure Environment**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+2. **Update Deployment Script**:
+   Edit `script/Deploy.s.sol` to set the correct addresses for your target network:
+   - Pool Manager address
+   - USDC token address
+   - Emergency admin address
+
+3. **Deploy to Network**:
+   ```bash
+   # Deploy to Sepolia testnet
+   forge script script/Deploy.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast --verify
+
+   # Deploy to mainnet (be careful!)
+   forge script script/Deploy.s.sol --rpc-url $MAINNET_RPC_URL --broadcast --verify
+   ```
+
+## 📋 Contract Interfaces
+
+### ShieldFiHook
+
+Main hook contract providing MEV protection for Uniswap v4 pools.
+
+```solidity
+// Register for MEV protection
+function registerProtection(ProtectionLevel level) external payable;
+
+// Check user protection status
+function getUserProtection(address user) external view returns (
+    ProtectionLevel level,
+    uint256 feePaid,
+    bool isActive,
+    uint256 lastUpdate
+);
+```
+
+### MEVDetector
+
+Advanced MEV detection engine with configurable thresholds.
+
+```solidity
+// Detect MEV attempts
+function detectMEV(address user, uint256 amount, uint256 timestamp) 
+    external view returns (MEVAnalysis memory);
+
+// Flag suspicious liquidations
+function flagLiquidation(address borrower, uint256 healthFactor, uint256 amount) 
+    external returns (bool shouldDelay);
+```
+
+### CircleUSDCVault
+
+USDC lending infrastructure with collateral management.
+
+```solidity
+// Deposit USDC
+function deposit(uint256 amount) external;
+
+// Borrow against collateral
+function borrow(uint256 amount) external;
+
+// Deposit collateral
+function depositCollateral(address asset, uint256 amount) external;
+
+// Get user position
+function getUserPosition(address user) external view returns (UserPosition memory);
+```
+
+### GradualLiquidator
+
+Time-distributed liquidation system to minimize MEV extraction.
+
+```solidity
+// Start gradual liquidation
+function liquidateGradually(address borrower, uint256 amount, uint256 maxChunks) 
+    external returns (bytes32 liquidationId);
+
+// Execute next liquidation chunk
+function executeNextChunk(bytes32 liquidationId) external returns (bool completed);
+```
+
+## 🔧 Configuration
+
+### MEV Detection Thresholds
+
+```solidity
+// Sandwich attack detection (price impact %)
+mevDetector.updateDetectionThreshold("sandwich_threshold", 50); // 5%
+
+// High-frequency trading detection (tx per block)
+mevDetector.updateDetectionThreshold("hft_threshold", 10);
+
+// Large transaction threshold (USDC amount)
+mevDetector.updateDetectionThreshold("large_tx_threshold", 100000e6); // $100k
+
+// Timing attack detection (blocks)
+mevDetector.updateDetectionThreshold("timing_threshold", 2);
+```
+
+### Protection Fees
+
+```solidity
+// Set protection fees
+hook.setProtectionFee(ProtectionLevel.STANDARD, 0.001 ether);
+hook.setProtectionFee(ProtectionLevel.PREMIUM, 0.005 ether);
+```
+
+### Collateral Assets
+
+```solidity
+// Add collateral asset
+vault.addCollateralAsset(
+    wethAddress,
+    8000, // 80% collateral factor
+    8500, // 85% liquidation threshold
+    500,  // 5% liquidation penalty
+    oracleAddress
+);
+```
+
+## 🧪 Testing Strategy
+
+### Unit Tests
+
+- Individual contract functionality
+- Edge cases and error conditions
+- Access control and permissions
+
+### Integration Tests
+
+- Cross-contract interactions
+- MEV detection scenarios
+- Liquidation workflows
+
+### Scenario Tests
+
+- Sandwich attack protection
+- Gradual liquidation execution
+- Emergency pause scenarios
+
+## 🔒 Security Considerations
+
+### Access Control
+
+- **Owner**: Can update system parameters and emergency controls
+- **Emergency Admin**: Can pause/unpause system in emergencies
+- **Authorized Liquidators**: Can execute liquidations
+- **Whitelisted Addresses**: Exempt from certain MEV protections
+
+### Risk Mitigation
+
+- **Reentrancy Protection**: All external calls protected
+- **Integer Overflow**: SafeMath and Solidity 0.8+ protections
+- **Oracle Manipulation**: Multiple oracle sources and sanity checks
+- **Flash Loan Attacks**: Detection and prevention mechanisms
+
+### Emergency Procedures
+
+1. **System Pause**: Immediate halt of all operations
+2. **Emergency Liquidation**: Fast-track liquidation for critical positions
+3. **Parameter Updates**: Quick adjustment of risk parameters
+4. **Whitelist Management**: Rapid response to false positives
+
+## 📊 Monitoring and Analytics
+
+### Key Metrics
+
+- MEV attempts detected and prevented
+- Protection fee revenue
+- Liquidation efficiency
+- User adoption rates
+- System health indicators
+
+### Events and Logging
+
+All major operations emit events for monitoring:
+
+```solidity
+event MEVDetected(address indexed user, uint256 riskLevel, string attackType);
+event ProtectionActivated(address indexed user, ProtectionLevel level);
+event LiquidationStarted(bytes32 indexed liquidationId, address indexed borrower);
+event EmergencyAction(string action, address indexed admin);
+```
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+
+### Development Workflow
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Ensure all tests pass
+6. Submit a pull request
+
+### Code Standards
+
+- Follow Solidity style guide
+- Add comprehensive comments
+- Include unit tests for new features
+- Update documentation as needed
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🔗 Links
+
+- [Documentation](https://docs.shieldfi.io)
+- [Discord Community](https://discord.gg/shieldfi)
+- [Twitter](https://twitter.com/shieldfi)
+- [Blog](https://blog.shieldfi.io)
+
+## ⚠️ Disclaimer
+
+This software is experimental and provided "as is" without warranties. Use at your own risk. Always conduct thorough testing and audits before deploying to mainnet.
+
+## 🙏 Acknowledgments
+
+- Uniswap Labs for v4 architecture
+- OpenZeppelin for security libraries
+- EigenLayer for AVS infrastructure
+- Circle for USDC integration
+- The broader DeFi community for inspiration and feedback
 
 ---
 
-<details>
-<summary><h2>Troubleshooting</h2></summary>
-
-
-
-### *Permission Denied*
-
-When installing dependencies with `forge install`, Github may throw a `Permission Denied` error
-
-Typically caused by missing Github SSH keys, and can be resolved by following the steps [here](https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh) 
-
-Or [adding the keys to your ssh-agent](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent#adding-your-ssh-key-to-the-ssh-agent), if you have already uploaded SSH keys
-
-### Anvil fork test failures
-
-Some versions of Foundry may limit contract code size to ~25kb, which could prevent local tests to fail. You can resolve this by setting the `code-size-limit` flag
-
-```
-anvil --code-size-limit 40000
-```
-
-### Hook deployment failures
-
-Hook deployment failures are caused by incorrect flags or incorrect salt mining
-
-1. Verify the flags are in agreement:
-    * `getHookCalls()` returns the correct flags
-    * `flags` provided to `HookMiner.find(...)`
-2. Verify salt mining is correct:
-    * In **forge test**: the *deployer* for: `new Hook{salt: salt}(...)` and `HookMiner.find(deployer, ...)` are the same. This will be `address(this)`. If using `vm.prank`, the deployer will be the pranking address
-    * In **forge script**: the deployer must be the CREATE2 Proxy: `0x4e59b44847b379578588920cA78FbF26c0B4956C`
-        * If anvil does not have the CREATE2 deployer, your foundry may be out of date. You can update it with `foundryup`
-
-</details>
-
----
-
-Additional resources:
-
-[Uniswap v4 docs](https://docs.uniswap.org/contracts/v4/overview)
-
-[v4-periphery](https://github.com/uniswap/v4-periphery) contains advanced hook implementations that serve as a great reference
-
-[v4-core](https://github.com/uniswap/v4-core)
-
-[v4-by-example](https://v4-by-example.org)
+**Built with ❤️ by the ShieldFi Team**
 

@@ -219,13 +219,36 @@ contract GradualLiquidator is IGradualLiquidator, Ownable, ReentrancyGuard, Paus
         (bool isLiquidatable,) = vault.isPositionLiquidatable(borrower);
         require(isLiquidatable, "Position not liquidatable");
 
-        // Calculate optimal chunking strategy
+        // Calculate optimal chunking strategy, but respect maxChunks
         MarketConditions memory conditions = _getCurrentMarketConditions();
-        (uint256 chunks, uint256[] memory chunkSizes, uint256[] memory delays) = this.calculateOptimalChunking(
+        (uint256 optimalChunks, uint256[] memory chunkSizes, uint256[] memory delays) = this.calculateOptimalChunking(
             totalAmount,
             110, // Default health factor threshold
             conditions
         );
+        
+        // Use the minimum of optimal chunks and maxChunks requested
+        uint256 chunks = optimalChunks > maxChunks ? maxChunks : optimalChunks;
+        
+        // If we need to reduce chunks, recalculate with the constrained amount
+        if (chunks != optimalChunks) {
+            // Simple equal distribution when constrained by maxChunks
+            chunkSizes = new uint256[](chunks);
+            delays = new uint256[](chunks);
+            
+            uint256 baseChunkSize = totalAmount / chunks;
+            uint256 remainingAmount = totalAmount;
+            
+            for (uint256 i = 0; i < chunks; i++) {
+                if (i == chunks - 1) {
+                    chunkSizes[i] = remainingAmount;
+                } else {
+                    chunkSizes[i] = baseChunkSize;
+                    remainingAmount -= baseChunkSize;
+                }
+                delays[i] = config.chunkDelay;
+            }
+        }
 
         // Create liquidation chunks
         _createLiquidationChunks(liquidationId, borrower, chunkSizes, delays);
@@ -259,22 +282,26 @@ contract GradualLiquidator is IGradualLiquidator, Ownable, ReentrancyGuard, Paus
         }
 
         // Check for MEV activity before execution
-        bool mevDetected = _checkMEVActivity(chunk.borrower, chunk.chunkAmount);
-        
-        if (mevDetected && !config.emergencyMode) {
-            // Delay execution if MEV detected
-            chunk.executionTime = block.timestamp + config.chunkDelay;
-            return (false, 0);
+        {
+            bool mevDetected = _checkMEVActivity(chunk.borrower, chunk.chunkAmount);
+            
+            if (mevDetected && !config.emergencyMode) {
+                // Delay execution if MEV detected
+                chunk.executionTime = block.timestamp + config.chunkDelay;
+                return (false, 0);
+            }
         }
 
         // Monitor health factor before execution
-        (uint256 healthFactor, uint256 trend) = monitorHealthFactor(chunk.borrower);
-        
-        // Check if emergency liquidation should be triggered
-        if (healthFactor < 102 || (healthFactor < 105 && trend == 2)) {
-            // Trigger emergency liquidation for remaining chunks
-            _triggerEmergencyLiquidation(liquidationId, "Critical health factor detected");
-            return (true, chunk.chunkAmount);
+        {
+            (uint256 healthFactor, uint256 trend) = monitorHealthFactor(chunk.borrower);
+            
+            // Check if emergency liquidation should be triggered
+            if (healthFactor < 102 || (healthFactor < 105 && trend == 2)) {
+                // Trigger emergency liquidation for remaining chunks
+                _triggerEmergencyLiquidation(liquidationId, "Critical health factor detected");
+                return (true, chunk.chunkAmount);
+            }
         }
 
         // Execute the liquidation chunk
@@ -282,21 +309,11 @@ contract GradualLiquidator is IGradualLiquidator, Ownable, ReentrancyGuard, Paus
         chunkAmount = chunk.chunkAmount;
 
         if (success) {
-            // Calculate if this was early execution (before scheduled time)
-            bool isEarlyExecution = block.timestamp < chunk.executionTime;
+            // Get original execution time before it's overwritten
+            uint256 originalExecutionTime = liquidationChunks[liquidationId][nextChunkIndex].executionTime;
             
-            // Process liquidation reward
-            processLiquidationReward(msg.sender, liquidationId, nextChunkIndex, chunkAmount, isEarlyExecution);
-            
-            // Track gas usage
-            uint256 gasUsed = gasStart - gasleft();
-            liquidationGasUsed[liquidationId] += gasUsed;
-            
-            // Check if liquidation is complete
-            if (_isLiquidationComplete(liquidationId)) {
-                processCompletionBonus(msg.sender, liquidationId, _getTotalLiquidationAmount(liquidationId));
-                _completeLiquidation(liquidationId);
-            }
+            // Process rewards and completion in separate scope to manage stack
+            _processChunkCompletion(liquidationId, nextChunkIndex, chunkAmount, gasStart, originalExecutionTime);
         }
 
         return (success, chunkAmount);
@@ -588,6 +605,7 @@ contract GradualLiquidator is IGradualLiquidator, Ownable, ReentrancyGuard, Paus
         uint256[] memory delays
     ) internal {
         uint256 currentTime = block.timestamp;
+        uint256 cumulativeDelay = 0;
         
         for (uint256 i = 0; i < chunkSizes.length; i++) {
             liquidationChunks[liquidationId].push(LiquidationChunk({
@@ -596,10 +614,15 @@ contract GradualLiquidator is IGradualLiquidator, Ownable, ReentrancyGuard, Paus
                 chunkAmount: chunkSizes[i],
                 chunkIndex: i,
                 totalChunks: chunkSizes.length,
-                executionTime: currentTime + (i * delays[i]),
+                executionTime: currentTime + cumulativeDelay,
                 executed: false,
                 marketImpact: 0
             }));
+            
+            // Add current delay to cumulative for next chunk
+            if (i < delays.length) {
+                cumulativeDelay += delays[i];
+            }
         }
     }
 
@@ -701,6 +724,31 @@ contract GradualLiquidator is IGradualLiquidator, Ownable, ReentrancyGuard, Paus
         }
         
         return totalAmount;
+    }
+
+    function _processChunkCompletion(
+        bytes32 liquidationId,
+        uint256 chunkIndex,
+        uint256 chunkAmount,
+        uint256 gasStart,
+        uint256 originalExecutionTime
+    ) internal {
+        // Calculate if this was early execution (before originally scheduled time)
+        bool isEarlyExecution = block.timestamp <= originalExecutionTime;
+        
+        // Process liquidation reward
+        processLiquidationReward(msg.sender, liquidationId, chunkIndex, chunkAmount, isEarlyExecution);
+        
+        // Track gas usage
+        uint256 gasUsed = gasStart - gasleft();
+        liquidationGasUsed[liquidationId] += gasUsed;
+        
+        // Check if liquidation is complete
+        if (_isLiquidationComplete(liquidationId)) {
+            uint256 totalAmount = _getTotalLiquidationAmount(liquidationId);
+            processCompletionBonus(msg.sender, liquidationId, totalAmount);
+            _completeLiquidation(liquidationId);
+        }
     }
 
     function _triggerEmergencyLiquidation(bytes32 liquidationId, string memory reason) internal {
