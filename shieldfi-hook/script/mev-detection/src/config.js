@@ -5,7 +5,7 @@ const NATIVE_ETH = "0x0000000000000000000000000000000000000000";
 
 module.exports = {
   DETECTION_PARAMS: {
-    // Detection thresholds
+    
     LARGE_SWAP_THRESHOLD: ethers.parseEther("0.5"),
     GAS_ANOMALY_FACTOR: 2.5,
     SANDWICH_TIME_WINDOW: 3, 
@@ -18,8 +18,7 @@ module.exports = {
     V4_HOOKS: [
       "0x0000000000000000000000000000000000000000" 
     ],
-    
-    // Native ETH configuration
+  
     NATIVE_ETH,
     WETH_ADDRESS: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
     TOKEN_DECIMALS: {

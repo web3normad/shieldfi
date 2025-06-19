@@ -4,20 +4,18 @@ const { getTransactionValue } = require('../utils');
 function detectLiquidationExploitation(liquidation, context) {
   const startGas = gasleft();
   
-  let riskScore = 5; // Base risk
-  
-  // 1. Gas price anomaly
+  let riskScore = 5; 
+
   if (detectGasAnomaly(liquidation.tx.gasPrice, context.avgGasPrice)) {
     riskScore += 3;
   }
   
-  // 2. Value-based risk (using native ETH value)
+
   const value = getTransactionValue(liquidation.tx);
   if (value > context.avgLiquidationSize * 2n) {
     riskScore += 2;
   }
-  
-  // 3. V4-specific features
+
   if (liquidation.hookAddress) {
     riskScore += detectV4LiquidationFeatures(liquidation);
   }
@@ -31,9 +29,8 @@ function detectLiquidationExploitation(liquidation, context) {
   return Math.min(10, riskScore);
 }
 
-// V4-specific liquidation detection
 function detectV4LiquidationFeatures(liquidation) {
-  // Placeholder for V4-specific logic
+
   return 2;
 }
 

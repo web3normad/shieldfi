@@ -1,6 +1,5 @@
 const { DETECTION_PARAMS } = require('../config');
 
-// Gas anomaly detection optimized for V4
 function detectGasAnomaly(txGasPrice, avgGasPrice) {
   if (!avgGasPrice || avgGasPrice === 0n) return false;
   
@@ -8,7 +7,7 @@ function detectGasAnomaly(txGasPrice, avgGasPrice) {
   return gasRatio > DETECTION_PARAMS.GAS_ANOMALY_FACTOR;
 }
 
-// Gas usage tracker
+
 function trackGasUsage(startGas, context) {
   const gasUsed = startGas - gasleft();
   context.totalGasUsed += gasUsed;
