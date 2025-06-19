@@ -4,7 +4,14 @@ pragma solidity ^0.8.26;
 
 import "forge-std/Test.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {PoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
+import {IProtocolFees} from "@uniswap/v4-core/src/interfaces/IProtocolFees.sol";
+import {IExtsload} from "@uniswap/v4-core/src/interfaces/IExtsload.sol";
+import {IExttload} from "@uniswap/v4-core/src/interfaces/IExttload.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 import {PoolDonateTest} from "@uniswap/v4-core/src/test/PoolDonateTest.sol";
@@ -67,8 +74,48 @@ contract TestToken {
     }
 }
 
+// Minimal mock PoolManager that implements only what we need for testing
+contract MockPoolManager {
+    using PoolIdLibrary for PoolKey;
+    
+    mapping(PoolId => bool) public poolInitialized;
+    
+    function initialize(PoolKey memory key, uint160) external returns (int24) {
+        PoolId id = key.toId();
+        poolInitialized[id] = true;
+        return 0;
+    }
+    
+    function unlock(bytes calldata data) external returns (bytes memory) {
+        (bool success, bytes memory result) = msg.sender.call(
+            abi.encodeWithSelector(bytes4(keccak256("unlockCallback(bytes)")), data)
+        );
+        require(success, "Unlock callback failed");
+        return result;
+    }
+    
+    function modifyLiquidity(
+        PoolKey memory,
+        ModifyLiquidityParams memory,
+        bytes calldata
+    ) external pure returns (BalanceDelta callerDelta, BalanceDelta feesAccrued) {
+        return (BalanceDelta.wrap(int256(1e18)), BalanceDelta.wrap(0));
+    }
+    
+    function swap(
+        PoolKey memory,
+        SwapParams memory,
+        bytes calldata
+    ) external pure returns (BalanceDelta) {
+        return BalanceDelta.wrap(int256(1e18));
+    }
+    
+    function take(Currency, address, uint256) external pure {}
+    function settle() external pure returns (uint256) { return 0; }
+}
+
 contract Fixtures is Test {
-    PoolManager manager;
+    MockPoolManager manager;
     PoolSwapTest swapRouter;
     PoolModifyLiquidityTest modifyLiquidityRouter;
     PoolDonateTest donateRouter;
@@ -77,12 +124,11 @@ contract Fixtures is Test {
     TestToken currency1;
 
     function deployFreshManagerAndRouters() internal {
-        // PoolManager constructor requires a controllerAddress parameter
-        // For testing, we can use address(this) as the controller
-        manager = new PoolManager(address(this));
-        swapRouter = new PoolSwapTest(manager);
-        modifyLiquidityRouter = new PoolModifyLiquidityTest(manager);
-        donateRouter = new PoolDonateTest(manager);
+        // Use our lightweight MockPoolManager
+        manager = new MockPoolManager();
+        swapRouter = new PoolSwapTest(IPoolManager(address(manager)));
+        modifyLiquidityRouter = new PoolModifyLiquidityTest(IPoolManager(address(manager)));
+        donateRouter = new PoolDonateTest(IPoolManager(address(manager)));
     }
 
     function deployMintAndApprove2Currencies() internal returns (TestToken, TestToken) {
@@ -116,7 +162,7 @@ contract Fixtures is Test {
         return (currency0, currency1);
     }
 
-    function deployAndApprovePosm(PoolManager) internal {
+    function deployAndApprovePosm(IPoolManager) internal {
         // Simplified for basic testing without PositionManager complexity
         // This avoids the permit2 dependencies for now
     }

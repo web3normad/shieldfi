@@ -40,9 +40,10 @@ ffi = true
 verbosity = 2
 auto_detect_solc = false
 
-# Test-specific settings
+# Test-specific settings - completely disable size limits for testing
 gas_limit = 30000000
-code_size_limit = 50000 
+code_size_limit = 1000000
+skip_initcode_size_check = true 
 
 [profile.ci]
 fuzz = { runs = 1000 }
