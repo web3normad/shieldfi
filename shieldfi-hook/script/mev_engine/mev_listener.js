@@ -1,51 +1,3 @@
-// const { ethers } = require("ethers");
-// const ABI = require("../Abi/aava_abi");
-// require("dotenv").config();
-
-// // const provider = new ethers.JsonRpcProvider(process.env.INFURA_URL);
-// const provider = new ethers.WebSocketProvider(process.env.INFURA_URL_WSS)
-// const contract = new ethers.Contract(
-//   process.env.AAVE_V3_LENDING_POOL_ADDRESS,
-//   ABI,
-//   provider
-// );
-
-// provider.on("error", (error) => {
-//   console.error("Provider error:", error);
-// });
-
-// contract.on("LiquidationCall", async (...args) => {
-//   try {
-//     console.log("Args", args);
-//     const event = args[args.length - 1];
-//     console.log(`⚡ Liquidation Detected:
-//     ➤ Liquidator: ${event.args.liquidator}
-//     ➤ User: ${event.args.user}
-//     ➤ Collateral: ${event.args.collateralAsset}
-//     ➤ Debt Asset: ${event.args.debtAsset}
-//     ➤ Block: ${event.blockNumber}
-//     ➤ Transaction: ${event.transactionHash}
-//         `);
-
-//     console.log("Full event data:", event.args);
-//   } catch (error) {
-//     console.error("Error processing liquidation event:", error);
-//   }
-// });
-
-// console.log("🔍 Monitoring Aave V2 liquidations...");
-// console.log("Contract address:", process.env.AAVE_V3_LENDING_POOL_ADDRESS);
-
-// setInterval(async () => {
-//   try {
-//     const blockNumber = await provider.getBlockNumber();
-//     console.log(`💓 Heartbeat - Current block: ${blockNumber}`);
-//   } catch (error) {
-//     console.error("Heartbeat failed:", error);
-//   }
-// }, 30000);
-
-
 
 
 const { ethers } = require("ethers");
@@ -54,7 +6,7 @@ require("dotenv").config();
 
 class MEVDetectionEngine {
   constructor() {
-    // Create primary provider with failover support
+
     this.provider = this.createProviderWithFallback();
     
     this.contract = new ethers.Contract(
@@ -62,8 +14,7 @@ class MEVDetectionEngine {
       ABI,
       this.provider
     );
-    
-    // MEV detection state
+
     this.pendingTransactions = new Map();
     this.suspiciousPatterns = new Map();
     this.gasAnalytics = {
@@ -72,18 +23,17 @@ class MEVDetectionEngine {
       maxSize: 100
     };
     
-    // Detection thresholds
-    this.LARGE_SWAP_THRESHOLD = ethers.parseEther("50000"); // $50k equiv
+
+    this.LARGE_SWAP_THRESHOLD = ethers.parseEther("50000"); 
     this.GAS_ANOMALY_MULTIPLIER = 2.0;
-    this.SANDWICH_TIME_WINDOW = 5; // blocks
+    this.SANDWICH_TIME_WINDOW = 5; 
     
-    // Provider health monitoring
+
     this.errorCount = 0;
     this.MAX_ERRORS = 10;
     this.requestQueue = [];
     this.isProcessingQueue = false;
-    
-    // Bind methods to preserve context
+
     this.detectSandwichAttacks = this.detectSandwichAttacks.bind(this);
     this.detectArbitragePatterns = this.detectArbitragePatterns.bind(this);
     this.detectFlashLoanMEV = this.detectFlashLoanMEV.bind(this);
@@ -93,11 +43,9 @@ class MEVDetectionEngine {
     this.startMempoolMonitoring();
     this.startGasAnalytics();
   }
-
-  // ================= PROVIDER MANAGEMENT =================
   createProviderWithFallback() {
     try {
-      // Try WebSocket first for real-time events
+  
       return new ethers.WebSocketProvider(process.env.INFURA_URL_WSS);
     } catch (error) {
       console.warn("WebSocket failed, falling back to HTTP");
@@ -113,12 +61,11 @@ class MEVDetectionEngine {
         if (this.provider.destroy) await this.provider.destroy();
       }
       
-      // Use backup provider if available
+   
       this.provider = process.env.BACKUP_PROVIDER_URL ?
         new ethers.WebSocketProvider(process.env.BACKUP_PROVIDER_URL) :
         new ethers.JsonRpcProvider(process.env.INFURA_URL_HTTP);
-      
-      // Re-bind methods after rotation
+  
       this.detectSandwichAttacks = this.detectSandwichAttacks.bind(this);
       this.detectArbitragePatterns = this.detectArbitragePatterns.bind(this);
       this.detectFlashLoanMEV = this.detectFlashLoanMEV.bind(this);
@@ -145,9 +92,9 @@ class MEVDetectionEngine {
     }
   }
 
-  // ================= CORE FUNCTIONALITY =================
+
   setupEventListeners() {
-    // Liquidation monitoring
+
     this.contract.on("LiquidationCall", async (...args) => {
       try {
         const event = args[args.length - 1];
@@ -221,32 +168,29 @@ class MEVDetectionEngine {
   }
 
   async analyzePendingTransaction(tx) {
-    if (!tx) return;  // Add null check
+    if (!tx) return;  
     
     const gasPrice = tx.gasPrice || tx.maxFeePerGas;
     
-    // Gas anomaly detection
     if (gasPrice && this.detectGasAnomaly(gasPrice)) {
       this.flagSuspiciousTransaction(tx, "HIGH_GAS");
     }
-    
-    // Large value detection
+   
     if (tx.value && tx.value > this.LARGE_SWAP_THRESHOLD) {
       this.flagSuspiciousTransaction(tx, "LARGE_SWAP");
     }
     
-    // Store for pattern analysis
+   
     this.pendingTransactions.set(tx.hash, {
       ...tx,
       timestamp: Date.now(),
       flags: []
     });
     
-    // Cleanup old transactions
+
     this.cleanupOldTransactions();
   }
 
-  // ================= GAS ANALYTICS FIXES =================
   startGasAnalytics() {
     this.gasAnalyticsInterval = setInterval(async () => {
       if (this.errorCount > this.MAX_ERRORS) {
@@ -255,7 +199,7 @@ class MEVDetectionEngine {
       }
       
       try {
-        // Use safe call with fallback value
+     
         const feeData = await this.safeProviderCall('getFeeData');
         const gasPrice = feeData.gasPrice ? Number(feeData.gasPrice) : 0;
         
@@ -273,10 +217,10 @@ class MEVDetectionEngine {
       } catch (error) {
         this.handleError("Gas analytics", error);
       }
-    }, 15000); // Reduced frequency to 15 seconds
+    }, 15000); 
   }
 
-  // ================= ERROR HANDLING =================
+
   handleError(context, error) {
     this.errorCount++;
     console.error(`[${context}] Error (${this.errorCount}/${this.MAX_ERRORS}):`, error.message || error);
@@ -287,7 +231,6 @@ class MEVDetectionEngine {
     }
   }
 
-  // ================= MODIFIED METHODS =================
   async analyzeBlockForMEV(blockNumber) {
     const startTime = Date.now();
     
@@ -434,17 +377,17 @@ class MEVDetectionEngine {
   }
 
   async analyzeLiquidation(event) {
-    let riskScore = 5; // Base liquidation score
+    let riskScore = 5; 
     
     try {
-      // Use safe provider call
+
       const block = await this.safeProviderCall('getBlock', event.blockNumber);
       if (!block || !block.transactions) return riskScore;
       
       const txIndex = block.transactions.indexOf(event.transactionHash);
       if (txIndex === -1) return riskScore;
       
-      // Check for sandwich around liquidation
+  
       if (txIndex > 0 && txIndex < block.transactions.length - 1) {
         const [prevTx, nextTx] = await Promise.all([
           this.safeProviderCall('getTransaction', block.transactions[txIndex - 1]),
@@ -452,11 +395,10 @@ class MEVDetectionEngine {
         ]);
         
         if (prevTx && nextTx && prevTx.from === nextTx.from) {
-          riskScore += 3; // Likely liquidation sandwich
+          riskScore += 3; 
         }
       }
-      
-      // Gas price analysis
+  
       const tx = await this.safeProviderCall('getTransaction', event.transactionHash);
       if (tx) {
         const gasPrice = tx.gasPrice || tx.maxFeePerGas;
@@ -472,7 +414,6 @@ class MEVDetectionEngine {
     return Math.min(riskScore, 10);
   }
 
-  // ================= HELPER METHODS =================
   detectGasAnomaly(gasPrice) {
     if (!gasPrice || this.gasAnalytics.avgGasPrice === 0) return false;
     const currentGas = Number(gasPrice);
@@ -482,11 +423,11 @@ class MEVDetectionEngine {
   filterDEXTransactions(transactions) {
     if (!transactions || !transactions.length) return [];
     
-    // Filter transactions that interact with known DEX contracts
+
     const dexAddresses = [
-      "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D", // Uniswap V2
-      "0xE592427A0AEce92De3Edee1F18E0157C05861564", // Uniswap V3
-      // Add more DEX addresses
+      "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+      "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+   
     ];
     
     return transactions.filter(tx => 
@@ -496,8 +437,7 @@ class MEVDetectionEngine {
 
   calculateArbitrageRisk(transactions) {
     if (!transactions || !transactions.length) return 0;
-    
-    // Implement arbitrage risk calculation
+
     let risk = 0;
     if (transactions.length >= 2) risk += 4;
     if (transactions.length >= 3) risk += 2;
@@ -507,18 +447,18 @@ class MEVDetectionEngine {
   isFlashLoanTransaction(tx) {
     if (!tx || !tx.data) return false;
     
-    // Check for flash loan function signatures
+
     const flashLoanSigs = [
-      "0x5cffe9de", // flashLoan
-      "0xab9c4b5d", // flashLoanSimple
+      "0x5cffe9de",
+      "0xab9c4b5d",
     ];
     
     return flashLoanSigs.some(sig => tx.data.startsWith(sig));
   }
 
   analyzeFlashLoanRisk(tx) {
-    // Analyze flash loan transaction for MEV indicators
-    return 6; // Base risk for flash loans
+ 
+    return 6;
   }
 
   flagSuspiciousTransaction(tx, flag) {
@@ -552,22 +492,19 @@ class MEVDetectionEngine {
     console.log(`🚨 MEV ALERT - ${type} (Risk: ${data.riskScore}/10)`);
     console.log(JSON.stringify(alert, null, 2));
     
-    // Here you could send to alerting system, database, etc.
+   
     this.sendToAlertSystem(alert);
   }
 
   sendToAlertSystem(alert) {
-    // Implement your alerting logic here
   }
 }
 
-// Initialize and start the MEV detection engine
 const mevEngine = new MEVDetectionEngine();
 
 console.log("🔍 Advanced MEV Detection Engine Started");
 console.log("📊 Monitoring: Sandwich Attacks, Arbitrage, Flash Loans, Liquidations");
 
-// Health monitoring
 setInterval(async () => {
   try {
     const blockNumber = await mevEngine.safeProviderCall('getBlockNumber');
