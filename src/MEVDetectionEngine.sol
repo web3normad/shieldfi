@@ -516,7 +516,7 @@ library MEVDetectionEngine {
         TransactionData memory frontTx,
         TransactionData memory victimTx,
         DetectionState storage state,
-        PoolId poolId
+        PoolId /* poolId */
     ) private view returns (uint256 score) {
         // Check direction pattern (same direction for sandwich)
         if (frontTx.zeroForOne != victimTx.zeroForOne) return 0;
@@ -713,7 +713,7 @@ library MEVDetectionEngine {
 
     function _calculateTimingRisk(
         DetectionState storage state,
-        PoolId poolId,
+        PoolId /* poolId */,
         TransactionData memory txData
     ) private view returns (uint256) {
         uint32 lastActivity = state.userLastActivity[txData.user];
@@ -810,7 +810,7 @@ library MEVDetectionEngine {
     }
 
     function _getAmountOut(
-        IPoolManager.SwapParams memory params,
+        IPoolManager.SwapParams memory /* params */,
         BalanceDelta delta
     ) private pure returns (uint256) {
         int256 deltaValue = BalanceDelta.unwrap(delta);

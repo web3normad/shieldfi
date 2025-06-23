@@ -230,7 +230,7 @@ contract MEVDetectionEngineTest is Test {
 
     // ============ Risk Scoring Tests ============
     
-    function test_calculateRiskScore_HighRisk() public {
+    function test_calculateRiskScore_HighRisk() public view {
         // Setup high-risk transaction data
         MEVDetectionEngine.TransactionData memory txData = MEVDetectionEngine.TransactionData({
             user: attacker,
@@ -250,7 +250,7 @@ contract MEVDetectionEngineTest is Test {
         console.log("High risk score:", riskScore);
     }
     
-    function test_calculateRiskScore_LowRisk() public {
+    function test_calculateRiskScore_LowRisk() public view {
         // Setup low-risk transaction data
         MEVDetectionEngine.TransactionData memory txData = MEVDetectionEngine.TransactionData({
             user: victim,

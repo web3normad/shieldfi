@@ -516,7 +516,7 @@ contract GradualLiquidationManager is Ownable, ReentrancyGuard, Pausable {
         request.isEmergency = true;
         
         // Execute full liquidation immediately
-        uint256 actualImpact = _performLiquidation(
+        _performLiquidation(
             request.user,
             request.collateralCurrency,
             request.debtCurrency,
@@ -663,7 +663,7 @@ contract GradualLiquidationManager is Ownable, ReentrancyGuard, Pausable {
     /**
      * @notice Get current health factor for a user position
      */
-    function _getCurrentHealthFactor(address user, PoolId poolId) internal view returns (uint256) {
+    function _getCurrentHealthFactor(address /* user */, PoolId /* poolId */) internal pure returns (uint256) {
         // Placeholder for health factor calculation
         // In production, this would query the lending protocol
         return 8000; // 80% healthy by default
@@ -747,12 +747,12 @@ contract GradualLiquidationManager is Ownable, ReentrancyGuard, Pausable {
     }
     
     function _performLiquidation(
-        address user,
-        Currency collateralCurrency,
-        Currency debtCurrency,
+        address /* user */,
+        Currency /* collateralCurrency */,
+        Currency /* debtCurrency */,
         uint256 amount,
-        address liquidator
-    ) internal returns (uint256 actualImpact) {
+        address /* liquidator */
+    ) internal view returns (uint256 actualImpact) {
         // Placeholder for actual liquidation logic
         return _estimateMarketImpact(amount, marketConditions[PoolId.wrap(bytes32(0))]);
     }
