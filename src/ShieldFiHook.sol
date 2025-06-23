@@ -11,6 +11,7 @@ import {BalanceDelta} from "lib/v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "lib/v4-core/src/types/BeforeSwapDelta.sol";
 import {Currency, CurrencyLibrary} from "lib/v4-core/src/types/Currency.sol";
 import {SafeCast} from "lib/v4-core/src/libraries/SafeCast.sol";
+
 import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "lib/openzeppelin-contracts/contracts/utils/Pausable.sol";
@@ -154,7 +155,7 @@ contract ShieldFiHook is BaseHook, Ownable, ReentrancyGuard, Pausable {
 
     // ============ Hook Permissions ============
     
-    function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
+    function getHookPermissions() public pure virtual override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
             beforeInitialize: false,
             afterInitialize: false,

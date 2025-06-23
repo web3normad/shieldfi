@@ -322,7 +322,10 @@ contract ShieldFiHookTest is Test {
         });
         
         vm.prank(address(poolManager));
+        // Since hook methods are now internal, test via pool manager
+        vm.startPrank(address(poolManager));
         hook.beforeSwap(user1, poolKey, params1, "");
+        vm.stopPrank();
         
         // Second large swap within detection window
         vm.warp(block.timestamp + DETECTION_WINDOW / 2);
