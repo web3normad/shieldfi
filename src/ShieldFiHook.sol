@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {IHooks} from "lib/v4-core/src/interfaces/IHooks.sol";
+import {BaseHook} from "lib/v4-periphery/src/utils/BaseHook.sol";
 import {Hooks} from "lib/v4-core/src/libraries/Hooks.sol";
+import {IHooks} from "lib/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "lib/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "lib/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "lib/v4-core/src/types/PoolId.sol";
@@ -21,11 +22,10 @@ import {GradualLiquidationManager} from "./GradualLiquidationManager.sol";
  * @dev A Uniswap v4 hook that provides MEV protection and redistribution mechanisms
  * @author ShieldFi Protocol
  */
-contract ShieldFiHook is IHooks, Ownable, ReentrancyGuard, Pausable {
+contract ShieldFiHook is BaseHook, Ownable, ReentrancyGuard, Pausable {
     using PoolIdLibrary for PoolKey;
     using SafeCast for uint256;
     using CurrencyLibrary for Currency;
-    using Hooks for IHooks;
     using MEVDetectionEngine for MEVDetectionEngine.DetectionState;
 
     // ============ Events ============
@@ -58,7 +58,6 @@ contract ShieldFiHook is IHooks, Ownable, ReentrancyGuard, Pausable {
     error UnauthorizedAccess();
     error InvalidPoolKey();
     error MEVNotDetected();
-    error HookNotImplemented();
 
     // ============ Structs ============
     
@@ -102,7 +101,6 @@ contract ShieldFiHook is IHooks, Ownable, ReentrancyGuard, Pausable {
 
     // ============ State Variables ============
     
-    IPoolManager public immutable poolManager;
     GradualLiquidationManager public liquidationManager;
     
     /// @dev Pool-specific protection configurations
@@ -137,13 +135,10 @@ contract ShieldFiHook is IHooks, Ownable, ReentrancyGuard, Pausable {
 
     // ============ Constructor ============
     
-    modifier onlyPoolManager() {
-        require(msg.sender == address(poolManager), "Only pool manager");
-        _;
-    }
-
-    constructor(IPoolManager _poolManager, address _owner) Ownable(_owner) {
-        poolManager = _poolManager;
+    constructor(IPoolManager _poolManager, address _owner) 
+        BaseHook(_poolManager) 
+        Ownable(_owner) 
+    {
         feeRecipient = _owner;
         authorizedCallers[_owner] = true;
     }
@@ -159,7 +154,7 @@ contract ShieldFiHook is IHooks, Ownable, ReentrancyGuard, Pausable {
 
     // ============ Hook Permissions ============
     
-    function getHookPermissions() public pure returns (Hooks.Permissions memory) {
+    function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
             beforeInitialize: false,
             afterInitialize: false,
@@ -178,88 +173,23 @@ contract ShieldFiHook is IHooks, Ownable, ReentrancyGuard, Pausable {
         });
     }
 
-    // ============ IHooks Interface Implementation ============
-
-    function beforeInitialize(address, PoolKey calldata, uint160) external pure returns (bytes4) {
-        revert HookNotImplemented();
-    }
-
-    function afterInitialize(address, PoolKey calldata, uint160, int24) external pure returns (bytes4) {
-        revert HookNotImplemented();
-    }
-
-    function beforeAddLiquidity(address, PoolKey calldata, IPoolManager.ModifyLiquidityParams calldata, bytes calldata)
-        external
-        pure
-        returns (bytes4)
-    {
-        revert HookNotImplemented();
-    }
-
-    function afterAddLiquidity(
-        address,
-        PoolKey calldata,
-        IPoolManager.ModifyLiquidityParams calldata,
-        BalanceDelta,
-        BalanceDelta,
-        bytes calldata
-    ) external pure returns (bytes4, BalanceDelta) {
-        revert HookNotImplemented();
-    }
-
-    function beforeRemoveLiquidity(
-        address,
-        PoolKey calldata,
-        IPoolManager.ModifyLiquidityParams calldata,
-        bytes calldata
-    ) external pure returns (bytes4) {
-        revert HookNotImplemented();
-    }
-
-    function afterRemoveLiquidity(
-        address,
-        PoolKey calldata,
-        IPoolManager.ModifyLiquidityParams calldata,
-        BalanceDelta,
-        BalanceDelta,
-        bytes calldata
-    ) external pure returns (bytes4, BalanceDelta) {
-        revert HookNotImplemented();
-    }
-
-    function beforeDonate(address, PoolKey calldata, uint256, uint256, bytes calldata)
-        external
-        pure
-        returns (bytes4)
-    {
-        revert HookNotImplemented();
-    }
-
-    function afterDonate(address, PoolKey calldata, uint256, uint256, bytes calldata)
-        external
-        pure
-        returns (bytes4)
-    {
-        revert HookNotImplemented();
-    }
-
     // ============ Hook Implementations ============
     
     /**
      * @dev Hook called before each swap to detect potential MEV
      */
-    function beforeSwap(
+    function _beforeSwap(
         address sender,
         PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
         bytes calldata
-    ) external onlyPoolManager whenNotPaused returns (bytes4, BeforeSwapDelta, uint24) {
+    ) internal virtual whenNotPaused returns (bytes4, BeforeSwapDelta, uint24) {
         PoolId poolId = key.toId();
         ProtectionConfig memory config = protectionConfigs[poolId];
         
         // Skip if protection not configured for this pool
         if (!config.enabled) {
-            return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+            return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
         }
 
         // Check if swap size triggers MEV detection
@@ -276,31 +206,31 @@ contract ShieldFiHook is IHooks, Ownable, ReentrancyGuard, Pausable {
             fee = uint24(config.protectionFee);
         }
 
-        return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, fee);
+        return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, fee);
     }
 
     /**
      * @dev Hook called after each swap to handle MEV redistribution
      */
-    function afterSwap(
+    function _afterSwap(
         address sender,
         PoolKey calldata key,
         IPoolManager.SwapParams calldata,
         BalanceDelta delta,
         bytes calldata
-    ) external onlyPoolManager whenNotPaused returns (bytes4, int128) {
+    ) internal virtual whenNotPaused returns (bytes4, int128) {
         PoolId poolId = key.toId();
         ProtectionConfig memory config = protectionConfigs[poolId];
         
         // Skip if protection not configured
         if (!config.enabled) {
-            return (IHooks.afterSwap.selector, 0);
+            return (BaseHook.afterSwap.selector, 0);
         }
 
         // Handle MEV redistribution
         _handleMEVRedistribution(sender, poolId, delta, config);
 
-        return (IHooks.afterSwap.selector, 0);
+        return (BaseHook.afterSwap.selector, 0);
     }
 
     // ============ Internal Functions ============
@@ -398,68 +328,65 @@ contract ShieldFiHook is IHooks, Ownable, ReentrancyGuard, Pausable {
             user,
             8000, // Health factor (80%)
             config.liquidationThreshold,
-            userProtections[user].protectedAmount
+            block.timestamp
         );
     }
-
+    
     /**
-     * @dev Handle MEV value redistribution to protected users
+     * @dev Handle MEV redistribution among protected users
      */
     function _handleMEVRedistribution(
-        address,
+        address sender,
         PoolId poolId,
         BalanceDelta delta,
         ProtectionConfig memory config
     ) internal {
-        // Calculate MEV value to redistribute
-        uint256 mevValue = _calculateMEVValue(delta, config);
+        // Calculate MEV value from swap
+        uint256 mevValue = _calculateMEVValue(delta);
         
         if (mevValue > 0) {
-            // Collect redistribution amount
             uint256 redistributionAmount = (mevValue * config.redistributionRate) / 10000;
             
-            // Update pool balance for later redistribution
-            Currency currency0 = Currency.wrap(config.protectedAsset);
-            poolBalances[poolId][currency0] += redistributionAmount;
+            // Distribute among protected users
+            _distributeRewards(poolId, redistributionAmount);
             
-            emit MEVRedistributed(poolId, redistributionAmount, _countProtectedUsers(poolId));
+            emit MEVRedistributed(poolId, redistributionAmount, 1); // Simplified for demo
         }
     }
-
+    
     /**
-     * @dev Calculate MEV value from swap delta
+     * @dev Calculate MEV value from balance delta
      */
-    function _calculateMEVValue(
-        BalanceDelta delta,
-        ProtectionConfig memory
-    ) internal pure returns (uint256) {
-        // Simplified MEV calculation - in practice this would be more sophisticated
-        int128 amount0 = delta.amount0();
-        int128 amount1 = delta.amount1();
+    function _calculateMEVValue(BalanceDelta delta) internal pure returns (uint256) {
+        // Simplified MEV value calculation based on balance changes
+        int256 amount0 = delta.amount0();
+        int256 amount1 = delta.amount1();
         
-        uint256 totalValue = amount0 > 0 ? uint256(uint128(amount0)) : 0;
-        totalValue += amount1 > 0 ? uint256(uint128(amount1)) : 0;
+        // Return absolute value of larger change as MEV estimate
+        uint256 value0 = amount0 > 0 ? uint256(amount0) : uint256(-amount0);
+        uint256 value1 = amount1 > 0 ? uint256(amount1) : uint256(-amount1);
         
-        return totalValue;
+        return value0 > value1 ? value0 : value1;
     }
-
+    
     /**
-     * @dev Count protected users in a pool
+     * @dev Distribute rewards among protected users
      */
-    function _countProtectedUsers(PoolId poolId) internal view returns (uint256) {
-        // This is a simplified implementation
-        // In practice, you'd maintain a more efficient counter
-        return totalProtectedAmount[poolId] > 0 ? 1 : 0;
+    function _distributeRewards(PoolId poolId, uint256 amount) internal {
+        // Simplified: In production, this would distribute proportionally among all protected users
+        // For now, just track the total amount available for distribution
+        poolBalances[poolId][Currency.wrap(address(0))] += amount;
     }
-
+    
     /**
-     * @dev Trigger gradual liquidation through the liquidation manager
+     * @dev Trigger gradual liquidation for a user
      */
     function _triggerGradualLiquidation(
         address user,
         PoolId poolId,
         ProtectionConfig memory config
     ) internal {
+        // Use try-catch to handle potential liquidation manager failures
         try liquidationManager.requestLiquidation(
             user,
             PoolKey({
