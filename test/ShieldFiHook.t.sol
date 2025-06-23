@@ -5,16 +5,17 @@ import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import {ShieldFiHook} from "../src/ShieldFiHook.sol";
 import {MEVDetectionEngine} from "../src/MEVDetectionEngine.sol";
-import {IHooks} from "lib/v4-core/src/interfaces/IHooks.sol";
-import {Hooks} from "lib/v4-core/src/libraries/Hooks.sol";
-import {IPoolManager} from "lib/v4-core/src/interfaces/IPoolManager.sol";
-import {PoolManager} from "lib/v4-core/src/PoolManager.sol";
-import {PoolKey} from "lib/v4-core/src/types/PoolKey.sol";
-import {PoolId, PoolIdLibrary} from "lib/v4-core/src/types/PoolId.sol";
-import {Currency, CurrencyLibrary} from "lib/v4-core/src/types/Currency.sol";
-import {BalanceDelta} from "lib/v4-core/src/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "lib/v4-core/src/types/BeforeSwapDelta.sol";
-import {TickMath} from "lib/v4-core/src/libraries/TickMath.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {PoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {GradualLiquidationManager} from "../src/GradualLiquidationManager.sol";
 
 // Mock contracts for testing
@@ -315,7 +316,7 @@ contract ShieldFiHookTest is Test {
         _enableUserProtection(user1);
         
         // First large swap
-        IPoolManager.SwapParams memory params1 = IPoolManager.SwapParams({
+        SwapParams memory params1 = SwapParams({
             zeroForOne: true,
             amountSpecified: -int256(MEV_THRESHOLD), // Large swap
             sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
@@ -330,7 +331,7 @@ contract ShieldFiHookTest is Test {
         // Second large swap within detection window
         vm.warp(block.timestamp + DETECTION_WINDOW / 2);
         
-        IPoolManager.SwapParams memory params2 = IPoolManager.SwapParams({
+        SwapParams memory params2 = SwapParams({
             zeroForOne: true,
             amountSpecified: -int256(MEV_THRESHOLD), // Another large swap
             sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1

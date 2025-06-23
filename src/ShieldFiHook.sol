@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {BaseHook} from "lib/v4-periphery/src/utils/BaseHook.sol";
-import {Hooks} from "lib/v4-core/src/libraries/Hooks.sol";
-import {IHooks} from "lib/v4-core/src/interfaces/IHooks.sol";
-import {IPoolManager} from "lib/v4-core/src/interfaces/IPoolManager.sol";
-import {PoolKey} from "lib/v4-core/src/types/PoolKey.sol";
-import {PoolId, PoolIdLibrary} from "lib/v4-core/src/types/PoolId.sol";
-import {BalanceDelta} from "lib/v4-core/src/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "lib/v4-core/src/types/BeforeSwapDelta.sol";
-import {Currency, CurrencyLibrary} from "lib/v4-core/src/types/Currency.sol";
-import {SafeCast} from "lib/v4-core/src/libraries/SafeCast.sol";
+import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
+import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
+import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
 import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
@@ -155,7 +156,7 @@ contract ShieldFiHook is BaseHook, Ownable, ReentrancyGuard, Pausable {
 
     // ============ Hook Permissions ============
     
-    function getHookPermissions() public pure virtual override returns (Hooks.Permissions memory) {
+    function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
             beforeInitialize: false,
             afterInitialize: false,
@@ -182,9 +183,9 @@ contract ShieldFiHook is BaseHook, Ownable, ReentrancyGuard, Pausable {
     function _beforeSwap(
         address sender,
         PoolKey calldata key,
-        IPoolManager.SwapParams calldata params,
+        SwapParams calldata params,
         bytes calldata
-    ) internal virtual whenNotPaused returns (bytes4, BeforeSwapDelta, uint24) {
+    ) internal override whenNotPaused returns (bytes4, BeforeSwapDelta, uint24) {
         PoolId poolId = key.toId();
         ProtectionConfig memory config = protectionConfigs[poolId];
         
@@ -216,7 +217,7 @@ contract ShieldFiHook is BaseHook, Ownable, ReentrancyGuard, Pausable {
     function _afterSwap(
         address sender,
         PoolKey calldata key,
-        IPoolManager.SwapParams calldata,
+        SwapParams calldata,
         BalanceDelta delta,
         bytes calldata
     ) internal virtual whenNotPaused returns (bytes4, int128) {
@@ -244,7 +245,7 @@ contract ShieldFiHook is BaseHook, Ownable, ReentrancyGuard, Pausable {
         PoolId poolId,
         uint256 swapAmount,
         ProtectionConfig memory config,
-        IPoolManager.SwapParams calldata params
+        SwapParams calldata params
     ) internal {
         // Use advanced MEV detection engine
         MEVDetectionEngine.MEVDetection memory detection = mevDetectionState.analyzeTransaction(
