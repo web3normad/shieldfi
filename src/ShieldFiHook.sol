@@ -220,7 +220,7 @@ contract ShieldFiHook is BaseHook, Ownable, ReentrancyGuard, Pausable {
         SwapParams calldata,
         BalanceDelta delta,
         bytes calldata
-    ) internal virtual whenNotPaused returns (bytes4, int128) {
+    ) internal override whenNotPaused returns (bytes4, int128) {
         PoolId poolId = key.toId();
         ProtectionConfig memory config = protectionConfigs[poolId];
         
